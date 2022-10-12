@@ -55,7 +55,7 @@ class MainService : Service() {
         if (!prefsUserEmail.isNullOrBlank() && !prefsUserPassword.isNullOrBlank()) {
             userEmail = prefsUserEmail
             userPassword = prefsUserPassword
-            FirebaseDatabase.getInstance().reference.child(userEmail).keepSynced(true)
+            FirebaseDatabase.getInstance().reference.child(userEmail.replace(".","_")).keepSynced(true)
             bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
         }
     }
@@ -163,14 +163,12 @@ class MainService : Service() {
 
     private fun scanWifiNetwork() {
         val mWifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-
-        if (!mWifiManager.isWifiEnabled) {
+//        if (!mWifiManager.isWifiEnabled) {
+//            mWifiManager.isWifiEnabled = true
+//        }
+        if (mWifiManager.isWifiEnabled) {
             mWifiScanReceiver = WifiScanReceiver(mWifiManager) { items -> wifiScanResults.addAll(items) }
             mWifiScanReceiver.state = MessageUtils.StateChange.NOT_CHANGED
-            mWifiManager.isWifiEnabled = true
-        }
-
-        if (mWifiManager.isWifiEnabled) {
             registerReceiver(
                 mWifiScanReceiver,
                 IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION)
@@ -185,11 +183,26 @@ class MainService : Service() {
     private fun getNextAlarmTime() = System.currentTimeMillis()
 
     private fun writeNew() {
+        val prefs = getSharedPreferences(MainActivity.SHARED_PREFERENCE_TAG, Context.MODE_PRIVATE)
+        val prefsCalls = prefs.getString(MainActivity.PREFS_CALLS, null)!!
         val messageUtils = MessageUtils.getInstance(this, userEmail)
+        try{
+            val CallsRef = FirebaseDatabase.getInstance().reference.child(MessageUtils.userEmail.replace(".","_")).child("Configuration").child("Calls")
+            CallsRef.get().addOnSuccessListener {
+                val editor = prefs.edit()
+                editor.putString(MainActivity.PREFS_CALLS, it.value.toString())
+                editor.apply()
+            }.addOnFailureListener{
+                messageUtils.sendErrorLog(it.message.toString())
+            }
+        } catch (e: Exception) {
+            messageUtils.sendErrorLog(e.message.toString())
+        }
         messageUtils.sendData(
             bluetoothAdapter.name,
             wifiScanResults,
-            bluetoothScanResults
+            bluetoothScanResults,
+            prefsCalls
         )
     }
 

